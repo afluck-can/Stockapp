@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NASDAQ Stock Picker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #0f1117; color: #e2e8f0; }
+
+    .glass {
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .score-bar { transition: width 0.6s ease; }
+
+    /* Signal badges */
+    .sig-STRONG\ BUY { background:#064e3b; color:#6ee7b7; border:1px solid #059669; }
+    .sig-BUY         { background:#1a3a1a; color:#86efac; border:1px solid #22c55e; }
+    .sig-WATCH       { background:#422006; color:#fde68a; border:1px solid #f59e0b; }
+    .sig-AVOID       { background:#431407; color:#fed7aa; border:1px solid #f97316; }
+    .sig-SKIP        { background:#450a0a; color:#fca5a5; border:1px solid #ef4444; }
+
+    /* Score color ranges */
+    .score-high   { color: #6ee7b7; }
+    .score-good   { color: #86efac; }
+    .score-mid    { color: #fde68a; }
+    .score-low    { color: #fed7aa; }
+    .score-bad    { color: #fca5a5; }
+
+    .bar-high   { background: linear-gradient(90deg,#059669,#6ee7b7); }
+    .bar-good   { background: linear-gradient(90deg,#16a34a,#86efac); }
+    .bar-mid    { background: linear-gradient(90deg,#d97706,#fde68a); }
+    .bar-low    { background: linear-gradient(90deg,#ea580c,#fed7aa); }
+    .bar-bad    { background: linear-gradient(90deg,#dc2626,#fca5a5); }
+
+    .sortable:hover { cursor: pointer; color: #7dd3fc; }
+    .sort-active    { color: #38bdf8 !important; }
+
+    /* Modal */
+    .modal-bg { background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); }
+
+    .pill-metric { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; }
+
+    .table-row:hover { background: rgba(255,255,255,0.04); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  </style>
+</head>
+
+<body x-data="stockApp()" x-init="init()">
+
+  <!-- ── HEADER ────────────────────────────────────────────── -->
+  <header class="glass sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-indigo-500 flex items-center justify-center font-bold text-white text-sm">S</div>
+      <div>
+        <h1 class="text-lg font-semibold text-white">NASDAQ Stock Picker</h1>
+        <p class="text-xs text-slate-400">AI-powered multi-factor scoring model</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button @click="showCriteria = true"
+        class="text-xs px-3 py-1.5 rounded-lg glass text-slate-300 hover:text-white transition">
+        ⚙ Methodology
+      </button>
+      <div class="text-xs text-slate-500" x-show="scanMeta.elapsed">
+        <span x-text="scanMeta.total"></span> stocks &bull;
+        <span x-text="scanMeta.elapsed + 's'"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── MAIN ──────────────────────────────────────────────── -->
+  <main class="max-w-screen-2xl mx-auto px-4 py-6">
+
+    <!-- Controls Row -->
+    <div class="glass rounded-xl p-4 mb-5 flex flex-wrap gap-3 items-end">
+      <!-- Custom tickers -->
+      <div class="flex-1 min-w-48">
+        <label class="block text-xs text-slate-400 mb-1">Tickers (optional)</label>
+        <input x-model="filters.tickers" type="text" placeholder="AAPL, MSFT, NVDA …"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+      </div>
+
+      <!-- Sector -->
+      <div class="min-w-36">
+        <label class="block text-xs text-slate-400 mb-1">Sector</label>
+        <select x-model="filters.sector"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+          <option value="">All Sectors</option>
+          <template x-for="s in sectors" :key="s">
+            <option :value="s" x-text="s"></option>
+          </template>
+        </select>
+      </div>
+
+      <!-- Signal -->
+      <div class="min-w-36">
+        <label class="block text-xs text-slate-400 mb-1">Signal</label>
+        <select x-model="filters.signal"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+          <option value="">All Signals</option>
+          <option>STRONG BUY</option>
+          <option>BUY</option>
+          <option>WATCH</option>
+          <option>AVOID</option>
+          <option>SKIP</option>
+        </select>
+      </div>
+
+      <!-- Min Score -->
+      <div class="min-w-28">
+        <label class="block text-xs text-slate-400 mb-1">Min Score</label>
+        <input x-model.number="filters.minScore" type="number" min="0" max="100" placeholder="0"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500" />
+      </div>
+
+      <!-- Per Page -->
+      <div class="min-w-24">
+        <label class="block text-xs text-slate-400 mb-1">Per Page</label>
+        <select x-model.number="filters.perPage"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+
+      <!-- Scan Button -->
+      <button @click="runScan()"
+        :disabled="loading"
+        class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-medium text-sm transition flex items-center gap-2">
+        <span x-show="loading" class="spinner w-4 h-4 inline-block"></span>
+        <span x-text="loading ? 'Scanning…' : 'Scan NASDAQ'"></span>
+      </button>
+
+      <!-- Refresh toggle -->
+      <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+        <input type="checkbox" x-model="filters.forceRefresh" class="rounded" />
+        Force refresh
+      </label>
+    </div>
+
+    <!-- Demo mode banner -->
+    <div x-show="demoMode" class="bg-amber-900/30 border border-amber-700/60 rounded-xl px-4 py-3 mb-4 text-amber-300 text-sm flex items-center gap-2">
+      <span class="text-amber-400">⚠</span>
+      <span><strong>Demo Mode</strong> — Yahoo Finance is unreachable in this environment. Scores are based on synthetic data to illustrate the app. Deploy with internet access for live NASDAQ data.</span>
+    </div>
+
+    <!-- Error -->
+    <div x-show="error" class="bg-red-900/40 border border-red-700 rounded-xl px-4 py-3 mb-4 text-red-300 text-sm" x-text="error"></div>
+
+    <!-- Loading skeleton / empty state -->
+    <div x-show="!loading && results.length === 0 && !error" class="text-center py-24 text-slate-500">
+      <div class="text-6xl mb-4">📈</div>
+      <p class="text-lg font-medium text-slate-300 mb-2">Ready to scan</p>
+      <p class="text-sm">Click <strong>Scan NASDAQ</strong> to score stocks using the multi-factor model.</p>
+    </div>
+
+    <!-- Results Table -->
+    <div x-show="results.length > 0" class="glass rounded-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-700/60 text-xs text-slate-400 uppercase tracking-wide">
+              <th class="px-4 py-3 text-left sortable" :class="sort.by==='ticker' && 'sort-active'"
+                @click="setSort('ticker')">Ticker</th>
+              <th class="px-4 py-3 text-left sortable" :class="sort.by==='name' && 'sort-active'"
+                @click="setSort('name')">Name</th>
+              <th class="px-4 py-3 text-left sortable" :class="sort.by==='sector' && 'sort-active'"
+                @click="setSort('sector')">Sector</th>
+              <th class="px-4 py-3 text-right sortable" :class="sort.by==='price' && 'sort-active'"
+                @click="setSort('price')">Price</th>
+              <th class="px-4 py-3 text-right sortable" :class="sort.by==='market_cap' && 'sort-active'"
+                @click="setSort('market_cap')">Mkt Cap</th>
+              <!-- Pillar scores -->
+              <th class="px-3 py-3 text-right sortable text-sky-400" :class="sort.by==='value.total' && 'sort-active'"
+                @click="setSort('value.total')">Value</th>
+              <th class="px-3 py-3 text-right sortable text-violet-400" :class="sort.by==='growth.total' && 'sort-active'"
+                @click="setSort('growth.total')">Growth</th>
+              <th class="px-3 py-3 text-right sortable text-emerald-400" :class="sort.by==='quality.total' && 'sort-active'"
+                @click="setSort('quality.total')">Quality</th>
+              <th class="px-3 py-3 text-right sortable text-amber-400" :class="sort.by==='momentum.total' && 'sort-active'"
+                @click="setSort('momentum.total')">Momentum</th>
+              <!-- Composite -->
+              <th class="px-4 py-3 text-right sortable font-semibold" :class="sort.by==='composite_score' && 'sort-active'"
+                @click="setSort('composite_score')">Score</th>
+              <th class="px-4 py-3 text-center">Signal</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="stock in results" :key="stock.ticker">
+              <tr class="table-row border-b border-slate-800/60 cursor-pointer"
+                @click="openDetail(stock)">
+                <td class="px-4 py-3 font-semibold text-sky-400" x-text="stock.ticker"></td>
+                <td class="px-4 py-3 text-slate-200 max-w-48 truncate" x-text="stock.name"></td>
+                <td class="px-4 py-3 text-slate-400 text-xs" x-text="stock.sector"></td>
+                <td class="px-4 py-3 text-right text-slate-200">
+                  $<span x-text="fmtPrice(stock.price)"></span>
+                </td>
+                <td class="px-4 py-3 text-right text-slate-400 text-xs" x-text="fmtCap(stock.market_cap)"></td>
+
+                <!-- Pillar mini-scores -->
+                <td class="px-3 py-3 text-right text-xs" :class="pillarColor(stock.value?.total, 25)"
+                  x-text="(stock.value?.total ?? '—')"></td>
+                <td class="px-3 py-3 text-right text-xs" :class="pillarColor(stock.growth?.total, 25)"
+                  x-text="(stock.growth?.total ?? '—')"></td>
+                <td class="px-3 py-3 text-right text-xs" :class="pillarColor(stock.quality?.total, 25)"
+                  x-text="(stock.quality?.total ?? '—')"></td>
+                <td class="px-3 py-3 text-right text-xs" :class="pillarColor(stock.momentum?.total, 25)"
+                  x-text="(stock.momentum?.total ?? '—')"></td>
+
+                <!-- Composite score with bar -->
+                <td class="px-4 py-3 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-16 bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                      <div class="h-1.5 rounded-full score-bar"
+                        :class="scoreBarClass(stock.composite_score)"
+                        :style="'width:' + stock.composite_score + '%'"></div>
+                    </div>
+                    <span class="font-semibold w-8 text-right"
+                      :class="scoreColor(stock.composite_score)"
+                      x-text="stock.composite_score"></span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-center">
+                  <span class="px-2 py-0.5 rounded text-xs font-medium"
+                    :class="'sig-' + stock.signal"
+                    x-text="stock.signal"></span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex items-center justify-between px-4 py-3 border-t border-slate-700/60 text-sm text-slate-400">
+        <span>Page <strong x-text="page"></strong> of <strong x-text="totalPages"></strong> &mdash; <span x-text="scanMeta.total"></span> results</span>
+        <div class="flex gap-2">
+          <button @click="prevPage()" :disabled="page <= 1 || loading"
+            class="px-3 py-1 rounded glass hover:text-white disabled:opacity-30 transition">← Prev</button>
+          <button @click="nextPage()" :disabled="page >= totalPages || loading"
+            class="px-3 py-1 rounded glass hover:text-white disabled:opacity-30 transition">Next →</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── DETAIL MODAL ───────────────────────────────────────── -->
+  <div x-show="detail" @click.self="detail = null"
+    class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-4" style="display:none">
+    <div x-show="detail" class="glass rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6"
+      @click.stop>
+      <template x-if="detail">
+        <div>
+          <!-- Header -->
+          <div class="flex items-start justify-between mb-5">
+            <div>
+              <div class="flex items-center gap-3 mb-1">
+                <span class="text-2xl font-bold text-sky-400" x-text="detail.ticker"></span>
+                <span class="px-2 py-0.5 rounded text-xs font-medium"
+                  :class="'sig-' + detail.signal" x-text="detail.signal"></span>
+              </div>
+              <p class="text-slate-300" x-text="detail.name"></p>
+              <p class="text-xs text-slate-500 mt-0.5">
+                <span x-text="detail.sector"></span> &bull;
+                <span x-text="detail.industry"></span>
+              </p>
+            </div>
+            <div class="text-right">
+              <div class="text-3xl font-bold" :class="scoreColor(detail.composite_score)"
+                x-text="detail.composite_score + '/100'"></div>
+              <div class="text-xs text-slate-400">Composite Score</div>
+            </div>
+          </div>
+
+          <!-- Key stats -->
+          <div class="grid grid-cols-3 gap-3 mb-5">
+            <div class="pill-metric rounded-lg p-3 text-center">
+              <div class="text-xs text-slate-400 mb-1">Price</div>
+              <div class="font-semibold text-white">$<span x-text="fmtPrice(detail.price)"></span></div>
+            </div>
+            <div class="pill-metric rounded-lg p-3 text-center">
+              <div class="text-xs text-slate-400 mb-1">Mkt Cap</div>
+              <div class="font-semibold text-white" x-text="fmtCap(detail.market_cap)"></div>
+            </div>
+            <div class="pill-metric rounded-lg p-3 text-center">
+              <div class="text-xs text-slate-400 mb-1">52W Range</div>
+              <div class="font-semibold text-white text-xs">
+                $<span x-text="fmtPrice(detail.fifty_two_week_low)"></span>
+                –
+                $<span x-text="fmtPrice(detail.fifty_two_week_high)"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Score breakdown -->
+          <div class="space-y-4">
+            <!-- Value -->
+            <div class="pill-metric rounded-xl p-4">
+              <div class="flex items-center justify-between mb-3">
+                <span class="font-semibold text-sky-400">Value</span>
+                <span class="text-lg font-bold" :class="pillarColor(detail.value?.total, 25)">
+                  <span x-text="detail.value?.total"></span><span class="text-xs text-slate-500">/25</span>
+                </span>
+              </div>
+              <div class="w-full bg-slate-700 rounded-full h-1.5 mb-3">
+                <div class="h-1.5 rounded-full score-bar bar-high"
+                  :style="'width:' + ((detail.value?.total/25)*100) + '%'"></div>
+              </div>
+              <div class="grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <div class="text-slate-400">P/E Ratio</div>
+                  <div class="font-medium" x-text="detail.value?.pe_ratio ?? '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.value?.pe_score"></span>/10</div>
+                </div>
+                <div>
+                  <div class="text-slate-400">P/B Ratio</div>
+                  <div class="font-medium" x-text="detail.value?.pb_ratio ?? '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.value?.pb_score"></span>/8</div>
+                </div>
+                <div>
+                  <div class="text-slate-400">P/S Ratio</div>
+                  <div class="font-medium" x-text="detail.value?.ps_ratio ?? '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.value?.ps_score"></span>/7</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Growth -->
+            <div class="pill-metric rounded-xl p-4">
+              <div class="flex items-center justify-between mb-3">
+                <span class="font-semibold text-violet-400">Growth</span>
+                <span class="text-lg font-bold" :class="pillarColor(detail.growth?.total, 25)">
+                  <span x-text="detail.growth?.total"></span><span class="text-xs text-slate-500">/25</span>
+                </span>
+              </div>
+              <div class="w-full bg-slate-700 rounded-full h-1.5 mb-3">
+                <div class="h-1.5 rounded-full score-bar bar-high"
+                  :style="'width:' + ((detail.growth?.total/25)*100) + '%'"></div>
+              </div>
+              <div class="grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <div class="text-slate-400">EPS Growth</div>
+                  <div class="font-medium" x-text="detail.growth?.earnings_growth_pct != null ? detail.growth.earnings_growth_pct + '%' : '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.growth?.earnings_growth_score"></span>/10</div>
+                </div>
+                <div>
+                  <div class="text-slate-400">Rev Growth</div>
+                  <div class="font-medium" x-text="detail.growth?.revenue_growth_pct != null ? detail.growth.revenue_growth_pct + '%' : '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.growth?.revenue_growth_score"></span>/8</div>
+                </div>
+                <div>
+                  <div class="text-slate-400">Fwd EPS Growth</div>
+                  <div class="font-medium" x-text="detail.growth?.implied_fwd_growth_pct != null ? detail.growth.implied_fwd_growth_pct + '%' : '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.growth?.fwd_growth_score"></span>/7</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quality -->
+            <div class="pill-metric rounded-xl p-4">
+              <div class="flex items-center justify-between mb-3">
+                <span class="font-semibold text-emerald-400">Quality</span>
+                <span class="text-lg font-bold" :class="pillarColor(detail.quality?.total, 25)">
+                  <span x-text="detail.quality?.total"></span><span class="text-xs text-slate-500">/25</span>
+                </span>
+              </div>
+              <div class="w-full bg-slate-700 rounded-full h-1.5 mb-3">
+                <div class="h-1.5 rounded-full score-bar bar-high"
+                  :style="'width:' + ((detail.quality?.total/25)*100) + '%'"></div>
+              </div>
+              <div class="grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <div class="text-slate-400">ROE</div>
+                  <div class="font-medium" x-text="detail.quality?.roe_pct != null ? detail.quality.roe_pct + '%' : '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.quality?.roe_score"></span>/10</div>
+                </div>
+                <div>
+                  <div class="text-slate-400">Profit Margin</div>
+                  <div class="font-medium" x-text="detail.quality?.profit_margin_pct != null ? detail.quality.profit_margin_pct + '%' : '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.quality?.profit_margin_score"></span>/8</div>
+                </div>
+                <div>
+                  <div class="text-slate-400">Debt/Equity</div>
+                  <div class="font-medium" x-text="detail.quality?.debt_to_equity ?? '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.quality?.debt_equity_score"></span>/7</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Momentum -->
+            <div class="pill-metric rounded-xl p-4">
+              <div class="flex items-center justify-between mb-3">
+                <span class="font-semibold text-amber-400">Momentum</span>
+                <span class="text-lg font-bold" :class="pillarColor(detail.momentum?.total, 25)">
+                  <span x-text="detail.momentum?.total"></span><span class="text-xs text-slate-500">/25</span>
+                </span>
+              </div>
+              <div class="w-full bg-slate-700 rounded-full h-1.5 mb-3">
+                <div class="h-1.5 rounded-full score-bar bar-high"
+                  :style="'width:' + ((detail.momentum?.total/25)*100) + '%'"></div>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <div class="text-slate-400">52W Return</div>
+                  <div class="font-medium" x-text="detail.momentum?.annual_return_pct != null ? detail.momentum.annual_return_pct + '%' : '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.momentum?.annual_return_score"></span>/15</div>
+                </div>
+                <div>
+                  <div class="text-slate-400">High Proximity</div>
+                  <div class="font-medium" x-text="detail.momentum?.high_proximity_pct != null ? detail.momentum.high_proximity_pct + '%' : '—'"></div>
+                  <div class="text-slate-500">score: <span x-text="detail.momentum?.high_proximity_score"></span>/10</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="flex justify-between items-center mt-5 pt-4 border-t border-slate-700/50">
+            <div class="text-xs text-slate-500">Data via Yahoo Finance. Not financial advice.</div>
+            <div class="flex gap-2">
+              <button @click="refreshDetail()"
+                class="text-xs px-3 py-1.5 glass rounded-lg text-slate-300 hover:text-white transition">
+                ↺ Refresh
+              </button>
+              <button @click="detail = null"
+                class="text-xs px-3 py-1.5 bg-slate-700 rounded-lg text-slate-300 hover:text-white transition">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ── CRITERIA MODAL ────────────────────────────────────── -->
+  <div x-show="showCriteria" @click.self="showCriteria = false"
+    class="modal-bg fixed inset-0 z-50 flex items-center justify-center p-4" style="display:none">
+    <div class="glass rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6" @click.stop>
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-xl font-bold text-white">Scoring Methodology</h2>
+        <button @click="showCriteria = false" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <template x-if="criteria">
+        <div>
+          <p class="text-sm text-slate-300 mb-5" x-text="criteria.description"></p>
+
+          <template x-for="pillar in criteria.pillars" :key="pillar.name">
+            <div class="pill-metric rounded-xl p-4 mb-4">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="font-semibold text-white" x-text="pillar.name"></h3>
+                <span class="text-xs text-slate-400">Max <strong x-text="pillar.max_points"></strong> pts</span>
+              </div>
+              <p class="text-xs text-slate-400 mb-3" x-text="pillar.description"></p>
+              <div class="space-y-2">
+                <template x-for="m in pillar.metrics" :key="m.metric">
+                  <div class="bg-slate-800/50 rounded-lg p-3">
+                    <div class="flex items-start justify-between mb-1">
+                      <span class="text-sm font-medium text-white" x-text="m.metric"></span>
+                      <span class="text-xs text-slate-500">/<span x-text="m.max"></span> pts</span>
+                    </div>
+                    <div class="flex gap-4 text-xs mb-1">
+                      <span class="text-emerald-400">✓ Ideal: <span x-text="m.ideal"></span></span>
+                      <span class="text-red-400">✗ Bad: <span x-text="m.bad"></span></span>
+                    </div>
+                    <p class="text-xs text-slate-500" x-text="m.rationale"></p>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+
+          <!-- Signal legend -->
+          <div class="pill-metric rounded-xl p-4">
+            <h3 class="font-semibold text-white mb-3">Signal Thresholds</h3>
+            <div class="space-y-2">
+              <template x-for="s in criteria.signals" :key="s.label">
+                <div class="flex items-center justify-between">
+                  <span class="px-2 py-0.5 rounded text-xs font-medium"
+                    :class="'sig-' + s.label" x-text="s.label"></span>
+                  <span class="text-xs text-slate-400" x-text="s.range + ' pts'"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ── ALPINE JS APP ──────────────────────────────────────── -->
+  <script>
+  function stockApp() {
+    return {
+      loading: false,
+      results: [],
+      sectors: [],
+      page: 1,
+      totalPages: 1,
+      scanMeta: {},
+      error: null,
+      detail: null,
+      showCriteria: false,
+      criteria: null,
+      demoMode: false,
+      sort: { by: 'composite_score', dir: 'desc' },
+      filters: {
+        tickers: '',
+        sector: '',
+        signal: '',
+        minScore: 0,
+        perPage: 25,
+        forceRefresh: false,
+      },
+
+      async init() {
+        await this.loadCriteria();
+        await this.checkStatus();
+      },
+
+      async checkStatus() {
+        try {
+          const r = await fetch('/api/status');
+          const s = await r.json();
+          this.demoMode = s.demo_mode;
+        } catch(e) { /* ignore */ }
+      },
+
+      async loadCriteria() {
+        try {
+          const r = await fetch('/api/criteria');
+          this.criteria = await r.json();
+        } catch(e) { /* ignore */ }
+      },
+
+      async runScan(newPage = 1) {
+        this.loading = true;
+        this.error = null;
+        this.page = newPage;
+
+        const params = new URLSearchParams({
+          page: this.page,
+          per_page: this.filters.perPage,
+          sort_by: this.sort.by.replace('.', '.'), // pass as-is
+          sort_dir: this.sort.dir,
+          min_score: this.filters.minScore || 0,
+          max_score: 100,
+          refresh: this.filters.forceRefresh,
+        });
+        if (this.filters.sector)   params.set('sector', this.filters.sector);
+        if (this.filters.signal)   params.set('signal', this.filters.signal);
+        if (this.filters.tickers)  params.set('tickers', this.filters.tickers);
+
+        try {
+          const r = await fetch('/api/scan?' + params.toString());
+          if (!r.ok) throw new Error(await r.text());
+          const data = await r.json();
+          this.results = data.results;
+          this.sectors = data.sectors;
+          this.totalPages = data.total_pages;
+          this.scanMeta = { total: data.total, elapsed: data.elapsed_seconds };
+        } catch(e) {
+          this.error = 'Scan failed: ' + e.message;
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      setSort(field) {
+        if (this.sort.by === field) {
+          this.sort.dir = this.sort.dir === 'desc' ? 'asc' : 'desc';
+        } else {
+          this.sort.by = field;
+          this.sort.dir = 'desc';
+        }
+        this.runScan(1);
+      },
+
+      prevPage() { if (this.page > 1) this.runScan(this.page - 1); },
+      nextPage() { if (this.page < this.totalPages) this.runScan(this.page + 1); },
+
+      async openDetail(stock) {
+        this.detail = stock;
+      },
+
+      async refreshDetail() {
+        if (!this.detail) return;
+        try {
+          const r = await fetch('/api/stock/' + this.detail.ticker + '?refresh=true');
+          this.detail = await r.json();
+          // also update in table
+          const idx = this.results.findIndex(s => s.ticker === this.detail.ticker);
+          if (idx !== -1) this.results[idx] = this.detail;
+        } catch(e) { /* ignore */ }
+      },
+
+      // ── Formatting helpers ──────────────────────────────────
+      fmtPrice(p) {
+        if (p == null) return '—';
+        return Number(p).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+
+      fmtCap(cap) {
+        if (!cap) return '—';
+        if (cap >= 1e12) return (cap / 1e12).toFixed(1) + 'T';
+        if (cap >= 1e9)  return (cap / 1e9).toFixed(1) + 'B';
+        if (cap >= 1e6)  return (cap / 1e6).toFixed(0) + 'M';
+        return cap.toLocaleString();
+      },
+
+      scoreColor(s) {
+        if (s >= 80) return 'score-high';
+        if (s >= 65) return 'score-good';
+        if (s >= 50) return 'score-mid';
+        if (s >= 35) return 'score-low';
+        return 'score-bad';
+      },
+
+      scoreBarClass(s) {
+        if (s >= 80) return 'bar-high';
+        if (s >= 65) return 'bar-good';
+        if (s >= 50) return 'bar-mid';
+        if (s >= 35) return 'bar-low';
+        return 'bar-bad';
+      },
+
+      pillarColor(score, max) {
+        if (score == null) return 'text-slate-500';
+        const pct = score / max;
+        if (pct >= 0.80) return 'text-emerald-400';
+        if (pct >= 0.60) return 'text-green-400';
+        if (pct >= 0.40) return 'text-yellow-400';
+        if (pct >= 0.20) return 'text-orange-400';
+        return 'text-red-400';
+      },
+    };
+  }
+  </script>
+</body>
+</html>
