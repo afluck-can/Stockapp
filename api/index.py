@@ -11,10 +11,11 @@ import logging
 import math
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import Any
 
 import yfinance as yf
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
 import scorer
@@ -111,6 +112,12 @@ def _fetch_and_score(ticker: str) -> dict[str, Any] | None:
 # ──────────────────────────────────────────────
 # Routes
 # ──────────────────────────────────────────────
+
+@app.route("/")
+def index():
+    html = Path(__file__).parent.parent / "public" / "index.html"
+    return send_file(str(html))
+
 
 @app.route("/api/status")
 def status():
