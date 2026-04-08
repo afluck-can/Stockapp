@@ -75,9 +75,10 @@
         class="text-xs px-3 py-1.5 rounded-lg glass text-slate-300 hover:text-white transition">
         ⚙ Methodology
       </button>
-      <div class="text-xs text-slate-500" x-show="scanMeta.elapsed">
-        <span x-text="scanMeta.total"></span> stocks &bull;
-        <span x-text="scanMeta.elapsed + 's'"></span>
+      <div class="text-xs text-slate-500">
+        <span x-show="scanMeta.total" x-text="scanMeta.total + ' stocks'"></span>
+        <span x-show="scanMeta.elapsed"> &bull; <span x-text="scanMeta.elapsed + 's'"></span></span>
+        <span x-show="!scanMeta.total" class="text-slate-600">~200 NASDAQ stocks</span>
       </div>
     </div>
   </header>
@@ -87,13 +88,6 @@
 
     <!-- Controls Row -->
     <div class="glass rounded-xl p-4 mb-5 flex flex-wrap gap-3 items-end">
-      <!-- Custom tickers -->
-      <div class="flex-1 min-w-48">
-        <label class="block text-xs text-slate-400 mb-1">Tickers (optional)</label>
-        <input x-model="filters.tickers" type="text" placeholder="AAPL, MSFT, NVDA …"
-          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
-      </div>
-
       <!-- Sector -->
       <div class="min-w-36">
         <label class="block text-xs text-slate-400 mb-1">Sector</label>
@@ -143,7 +137,7 @@
         :disabled="loading"
         class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-medium text-sm transition flex items-center gap-2">
         <span x-show="loading" class="spinner w-4 h-4 inline-block"></span>
-        <span x-text="loading ? 'Scanning…' : 'Scan NASDAQ'"></span>
+        <span x-text="loading ? 'Scanning…' : 'Scan All NASDAQ'"></span>
       </button>
 
       <!-- Refresh toggle -->
@@ -166,7 +160,7 @@
     <div x-show="!loading && results.length === 0 && !error" class="text-center py-24 text-slate-500">
       <div class="text-6xl mb-4">📈</div>
       <p class="text-lg font-medium text-slate-300 mb-2">Ready to scan</p>
-      <p class="text-sm">Click <strong>Scan NASDAQ</strong> to score stocks using the multi-factor model.</p>
+      <p class="text-sm">Click <strong>Scan All NASDAQ</strong> to score ~200 stocks using the multi-factor model.</p>
     </div>
 
     <!-- Results Table -->
@@ -522,7 +516,6 @@
       demoMode: false,
       sort: { by: 'composite_score', dir: 'desc' },
       filters: {
-        tickers: '',
         sector: '',
         signal: '',
         minScore: 0,
@@ -533,6 +526,7 @@
       async init() {
         await this.loadCriteria();
         await this.checkStatus();
+        await this.runScan();
       },
 
       async checkStatus() {
@@ -558,15 +552,14 @@
         const params = new URLSearchParams({
           page: this.page,
           per_page: this.filters.perPage,
-          sort_by: this.sort.by.replace('.', '.'), // pass as-is
+          sort_by: this.sort.by,
           sort_dir: this.sort.dir,
           min_score: this.filters.minScore || 0,
           max_score: 100,
           refresh: this.filters.forceRefresh,
         });
-        if (this.filters.sector)   params.set('sector', this.filters.sector);
-        if (this.filters.signal)   params.set('signal', this.filters.signal);
-        if (this.filters.tickers)  params.set('tickers', this.filters.tickers);
+        if (this.filters.sector) params.set('sector', this.filters.sector);
+        if (this.filters.signal) params.set('signal', this.filters.signal);
 
         try {
           const r = await fetch('/api/scan?' + params.toString());
