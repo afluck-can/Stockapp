@@ -1,9 +1,14 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/index.py", "use": "@vercel/python", "config": { "maxLambdaSize": "15mb" } }
+    { "src": "api/index.py", "use": "@vercel/python", "config": { "maxLambdaSize": "15mb" } },
+    { "src": "nutrition/api/index.py", "use": "@vercel/python", "config": { "maxLambdaSize": "15mb" } }
   ],
   "routes": [
+    { "src": "/nutrition/(.*)", "dest": "/nutrition/api/index.py" },
+    { "src": "/nutrition", "dest": "/nutrition/api/index.py" },
+    { "src": "/api/analyze-meal", "dest": "/nutrition/api/index.py" },
+    { "src": "/api/coach-tip", "dest": "/nutrition/api/index.py" },
     { "src": "/(.*)", "dest": "/api/index.py" }
   ]
 }

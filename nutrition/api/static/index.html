@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Macro Coach — Food Photo Analyzer</title>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --card: #ffffff;
+    --ink: #1f2420;
+    --muted: #6b7267;
+    --line: #e4e0d6;
+    --accent: #2f6f4f;
+    --accent-ink: #ffffff;
+    --protein: #c4652f;
+    --carbs: #3d7ab5;
+    --fat: #b58a2f;
+    --cal: #2f6f4f;
+    --danger: #b3432f;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding-bottom: 80px;
+  }
+  header {
+    padding: 20px 16px 12px;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  header h1 {
+    font-size: 1.4rem;
+    margin: 0 0 2px;
+    letter-spacing: -0.01em;
+  }
+  header p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 1rem;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Tabs */
+  nav.tabs {
+    display: flex;
+    gap: 4px;
+    max-width: 640px;
+    margin: 0 auto 12px;
+    padding: 0 16px;
+  }
+  nav.tabs button {
+    flex: 1;
+    padding: 10px 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+  }
+  nav.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabpanel { display: none; }
+  .tabpanel.active { display: block; }
+
+  /* Dashboard stats */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat-tile { text-align: center; }
+  .stat-tile .val { font-size: 1.15rem; font-weight: 700; }
+  .stat-tile .label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .bar-track { height: 8px; border-radius: 5px; background: var(--line); margin-top: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s ease; }
+
+  .macro-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .macro-row .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .macro-row .info { flex: 1; }
+  .macro-row .nums { font-size: 0.8rem; color: var(--muted); }
+
+  /* Upload area */
+  .upload-zone {
+    border: 2px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 28px 16px;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .upload-zone img { max-width: 100%; max-height: 260px; border-radius: 10px; display: block; margin: 0 auto; }
+  input[type=file] { display: none; }
+
+  textarea, input[type=text], input[type=number], select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: #fff;
+    color: var(--ink);
+  }
+  label { font-size: 0.8rem; color: var(--muted); display: block; margin: 10px 0 4px; }
+
+  button.primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 14px;
+  }
+  button.primary:disabled { opacity: 0.5; cursor: default; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  button.link {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+    gap: 10px;
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-row .name { font-weight: 600; font-size: 0.9rem; }
+  .item-row .meta { font-size: 0.75rem; color: var(--muted); }
+  .item-row .grams-input { width: 64px; text-align: right; padding: 4px 6px; font-size: 0.85rem; }
+  .item-row .macros { font-size: 0.78rem; color: var(--muted); text-align: right; min-width: 110px; }
+  .tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 5px; background: var(--line); color: var(--muted); }
+  .tag.usda { background: #dbeade; }
+
+  .meal-card { }
+  .meal-card .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .meal-card .head .time { font-size: 0.75rem; color: var(--muted); }
+
+  .coach-tip {
+    background: #eef4ea;
+    border: 1px solid #d3e3ca;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+
+  .empty { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 20px 0; }
+  .error-msg { color: var(--danger); font-size: 0.85rem; margin-top: 8px; }
+  .spinner {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 3px solid var(--line); border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite; margin: 12px auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field-hint { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Macro Coach</h1>
+  <p>Snap a photo of your meal — get calories &amp; macros toward your goal.</p>
+</header>
+
+<nav class="tabs">
+  <button data-tab="log" class="active">Log Meal</button>
+  <button data-tab="dashboard">Today</button>
+  <button data-tab="history">History</button>
+  <button data-tab="profile">Goals</button>
+</nav>
+
+<main>
+
+  <!-- LOG MEAL -->
+  <section id="tab-log" class="tabpanel active">
+    <div class="card">
+      <h2>📸 Analyze a meal</h2>
+      <div id="uploadZone" class="upload-zone">
+        <div id="uploadPrompt">Tap to take a photo or choose an image</div>
+        <img id="previewImg" style="display:none;">
+      </div>
+      <input type="file" id="fileInput" accept="image/*" capture="environment">
+      <label for="noteInput">Notes (optional) — portion hints, dressing, etc.</label>
+      <input type="text" id="noteInput" placeholder="e.g. no dressing, small bowl">
+      <button class="primary" id="analyzeBtn" disabled>Analyze photo</button>
+      <div id="analyzeError" class="error-msg" style="display:none;"></div>
+      <div id="analyzeSpinner" class="spinner" style="display:none;"></div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+      <h2>Estimated meal <span class="tag" id="confidenceTag"></span></h2>
+      <div id="itemsList"></div>
+      <div class="macro-row" style="margin-top:14px;">
+        <div class="info">
+          <strong>Total</strong>
+          <div class="nums" id="resultTotals"></div>
+        </div>
+      </div>
+      <button class="primary" id="logMealBtn">Log this meal</button>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="tab-dashboard" class="tabpanel">
+    <div class="card">
+      <h2>Today's progress</h2>
+      <div id="dashboardBody"></div>
+    </div>
+    <div class="card">
+      <h2>🎯 Coach tip</h2>
+      <div id="coachTipBody" class="empty">Log a meal or two, then ask your coach for a tip.</div>
+      <button class="secondary" id="coachTipBtn" style="margin-top:10px;">Get a coaching tip</button>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="tab-history" class="tabpanel">
+    <div id="historyList"></div>
+  </section>
+
+  <!-- PROFILE / GOALS -->
+  <section id="tab-profile" class="tabpanel">
+    <div class="card">
+      <h2>Your goal</h2>
+      <label for="goalSelect">What are you working toward?</label>
+      <select id="goalSelect">
+        <option value="muscle_gain">Build muscle (lean bulk)</option>
+        <option value="weight_gain">Gain weight</option>
+        <option value="maintenance">Maintain weight</option>
+        <option value="weight_loss">Lose weight</option>
+      </select>
+
+      <div class="grid-2">
+        <div>
+          <label for="sexSelect">Sex</label>
+          <select id="sexSelect">
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+        </div>
+        <div>
+          <label for="ageInput">Age</label>
+          <input type="number" id="ageInput" min="14" max="100" value="30">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label for="heightInput">Height (cm)</label>
+          <input type="number" id="heightInput" min="120" max="230" value="175">
+        </div>
+        <div>
+          <label for="weightInput">Weight (kg)</label>
+          <input type="number" id="weightInput" min="35" max="250" value="75" step="0.1">
+        </div>
+      </div>
+
+      <label for="activitySelect">Activity level</label>
+      <select id="activitySelect">
+        <option value="1.2">Sedentary (little/no exercise)</option>
+        <option value="1.375">Light (1-3 days/week)</option>
+        <option value="1.55" selected>Moderate (3-5 days/week)</option>
+        <option value="1.725">Active (6-7 days/week)</option>
+        <option value="1.9">Very active (physical job + training)</option>
+      </select>
+
+      <button class="primary" id="saveProfileBtn">Save &amp; recalculate targets</button>
+      <div class="field-hint" id="targetsPreview" style="margin-top:12px;"></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const STORAGE_PROFILE = "macrocoach_profile";
+const STORAGE_MEALS = "macrocoach_meals";
+
+// ---------- storage helpers ----------
+function loadProfile() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_PROFILE)) || null; } catch { return null; }
+}
+function saveProfile(p) { localStorage.setItem(STORAGE_PROFILE, JSON.stringify(p)); }
+function loadMeals() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_MEALS)) || []; } catch { return []; }
+}
+function saveMeals(m) { localStorage.setItem(STORAGE_MEALS, JSON.stringify(m)); }
+
+// ---------- macro target calc (Mifflin-St Jeor) ----------
+function computeTargets({ sex, age, heightCm, weightKg, activity, goal }) {
+  const bmr = sex === "male"
+    ? 10 * weightKg + 6.25 * heightCm - 5 * age + 5
+    : 10 * weightKg + 6.25 * heightCm - 5 * age - 161;
+  const tdee = bmr * activity;
+
+  let calories = tdee;
+  let proteinPerKg = 1.8;
+  if (goal === "muscle_gain") { calories = tdee * 1.12; proteinPerKg = 2.0; }
+  else if (goal === "weight_gain") { calories = tdee * 1.18; proteinPerKg = 1.8; }
+  else if (goal === "weight_loss") { calories = tdee * 0.8; proteinPerKg = 2.0; }
+  else { calories = tdee; proteinPerKg = 1.6; }
+
+  const protein_g = Math.round(proteinPerKg * weightKg);
+  const fat_g = Math.round((calories * 0.27) / 9);
+  const proteinCals = protein_g * 4;
+  const fatCals = fat_g * 9;
+  const carbs_g = Math.max(0, Math.round((calories - proteinCals - fatCals) / 4));
+
+  return {
+    calories: Math.round(calories),
+    protein_g, carbs_g, fat_g,
+  };
+}
+
+// ---------- tabs ----------
+document.querySelectorAll("nav.tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabs button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tabpanel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "dashboard") renderDashboard();
+    if (btn.dataset.tab === "history") renderHistory();
+  });
+});
+
+// ---------- profile form ----------
+function fillProfileForm(p) {
+  if (!p) return;
+  document.getElementById("goalSelect").value = p.goal;
+  document.getElementById("sexSelect").value = p.sex;
+  document.getElementById("ageInput").value = p.age;
+  document.getElementById("heightInput").value = p.heightCm;
+  document.getElementById("weightInput").value = p.weightKg;
+  document.getElementById("activitySelect").value = p.activity;
+}
+
+function currentFormProfile() {
+  return {
+    goal: document.getElementById("goalSelect").value,
+    sex: document.getElementById("sexSelect").value,
+    age: Number(document.getElementById("ageInput").value),
+    heightCm: Number(document.getElementById("heightInput").value),
+    weightKg: Number(document.getElementById("weightInput").value),
+    activity: Number(document.getElementById("activitySelect").value),
+  };
+}
+
+function updateTargetsPreview() {
+  const targets = computeTargets(currentFormProfile());
+  document.getElementById("targetsPreview").textContent =
+    `Daily target: ${targets.calories} kcal · ${targets.protein_g}g protein · ${targets.carbs_g}g carbs · ${targets.fat_g}g fat`;
+}
+
+document.getElementById("saveProfileBtn").addEventListener("click", () => {
+  const profile = currentFormProfile();
+  profile.targets = computeTargets(profile);
+  saveProfile(profile);
+  updateTargetsPreview();
+  renderDashboard();
+});
+
+["goalSelect","sexSelect","ageInput","heightInput","weightInput","activitySelect"].forEach(id => {
+  document.getElementById(id).addEventListener("input", updateTargetsPreview);
+});
+
+// ---------- image capture / resize ----------
+let selectedImage = null; // { base64, mediaType }
+
+document.getElementById("uploadZone").addEventListener("click", () => document.getElementById("fileInput").click());
+
+document.getElementById("fileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    selectedImage = await resizeImageToBase64(file);
+    const img = document.getElementById("previewImg");
+    img.src = `data:${selectedImage.mediaType};base64,${selectedImage.base64}`;
+    img.style.display = "block";
+    document.getElementById("uploadPrompt").style.display = "none";
+    document.getElementById("analyzeBtn").disabled = false;
+    document.getElementById("resultCard").style.display = "none";
+    document.getElementById("analyzeError").style.display = "none";
+  } catch (err) {
+    console.error(err);
+    showAnalyzeError("Could not read that image. Try a different photo.");
+  }
+});
+
+function resizeImageToBase64(file, maxDim = 1024, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("bad image"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve({ base64: dataUrl.split(",")[1], mediaType: "image/jpeg" });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ---------- analyze ----------
+let lastAnalysis = null;
+
+function showAnalyzeError(msg) {
+  const el = document.getElementById("analyzeError");
+  el.textContent = msg;
+  el.style.display = "block";
+}
+
+document.getElementById("analyzeBtn").addEventListener("click", async () => {
+  if (!selectedImage) return;
+  const btn = document.getElementById("analyzeBtn");
+  btn.disabled = true;
+  document.getElementById("analyzeSpinner").style.display = "block";
+  document.getElementById("analyzeError").style.display = "none";
+  document.getElementById("resultCard").style.display = "none";
+
+  try {
+    const resp = await fetch("/api/analyze-meal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_base64: selectedImage.base64,
+        media_type: selectedImage.mediaType,
+        note: document.getElementById("noteInput").value,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Analysis failed");
+    lastAnalysis = data;
+    renderAnalysisResult(data);
+  } catch (err) {
+    showAnalyzeError(err.message);
+  } finally {
+    btn.disabled = false;
+    document.getElementById("analyzeSpinner").style.display = "none";
+  }
+});
+
+function renderAnalysisResult(data) {
+  document.getElementById("resultCard").style.display = "block";
+  document.getElementById("confidenceTag").textContent = data.confidence + " confidence";
+  const list = document.getElementById("itemsList");
+  list.innerHTML = "";
+  data.items.forEach((item, idx) => {
+    const row = document.createElement("div");
+    row.className = "item-row";
+    row.innerHTML = `
+      <div>
+        <div class="name">${escapeHtml(item.name)}</div>
+        <div class="meta">
+          <span class="tag ${item.source === 'usda' ? 'usda' : ''}">${item.source === 'usda' ? 'USDA match' : 'AI estimate'}</span>
+        </div>
+      </div>
+      <input type="number" class="grams-input" data-idx="${idx}" value="${item.estimated_grams}"> g
+      <div class="macros" data-idx="${idx}">${formatMacros(item)}</div>
+    `;
+    list.appendChild(row);
+  });
+  updateResultTotals();
+
+  list.querySelectorAll(".grams-input").forEach(input => {
+    input.addEventListener("input", () => {
+      const idx = Number(input.dataset.idx);
+      const item = lastAnalysis.items[idx];
+      const newGrams = Number(input.value) || 0;
+      const ratio = item.estimated_grams > 0 ? newGrams / item.estimated_grams : 0;
+      item.calories = round1(item.calories * ratio);
+      item.protein_g = round1(item.protein_g * ratio);
+      item.carbs_g = round1(item.carbs_g * ratio);
+      item.fat_g = round1(item.fat_g * ratio);
+      item.estimated_grams = newGrams;
+      list.querySelector(`.macros[data-idx="${idx}"]`).textContent = formatMacros(item);
+      updateResultTotals();
+    });
+  });
+}
+
+function round1(n) { return Math.round(n * 10) / 10; }
+
+function formatMacros(item) {
+  return `${item.calories} kcal · P${item.protein_g} C${item.carbs_g} F${item.fat_g}`;
+}
+
+function updateResultTotals() {
+  const totals = lastAnalysis.items.reduce((acc, it) => {
+    acc.calories += it.calories; acc.protein_g += it.protein_g;
+    acc.carbs_g += it.carbs_g; acc.fat_g += it.fat_g;
+    return acc;
+  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  Object.keys(totals).forEach(k => totals[k] = round1(totals[k]));
+  lastAnalysis.totals = totals;
+  document.getElementById("resultTotals").textContent =
+    `${totals.calories} kcal · ${totals.protein_g}g protein · ${totals.carbs_g}g carbs · ${totals.fat_g}g fat`;
+}
+
+document.getElementById("logMealBtn").addEventListener("click", () => {
+  if (!lastAnalysis) return;
+  const meals = loadMeals();
+  meals.push({
+    id: Date.now().toString(36),
+    timestamp: new Date().toISOString(),
+    description: lastAnalysis.meal_description,
+    items: lastAnalysis.items,
+    totals: lastAnalysis.totals,
+  });
+  saveMeals(meals);
+
+  // reset log form
+  lastAnalysis = null;
+  selectedImage = null;
+  document.getElementById("fileInput").value = "";
+  document.getElementById("noteInput").value = "";
+  document.getElementById("previewImg").style.display = "none";
+  document.getElementById("uploadPrompt").style.display = "block";
+  document.getElementById("analyzeBtn").disabled = true;
+  document.getElementById("resultCard").style.display = "none";
+
+  document.querySelector('nav.tabs button[data-tab="dashboard"]').click();
+});
+
+// ---------- dashboard ----------
+function todaysMeals() {
+  const today = new Date().toDateString();
+  return loadMeals().filter(m => new Date(m.timestamp).toDateString() === today);
+}
+
+function sumTotals(meals) {
+  return meals.reduce((acc, m) => {
+    acc.calories += m.totals.calories; acc.protein_g += m.totals.protein_g;
+    acc.carbs_g += m.totals.carbs_g; acc.fat_g += m.totals.fat_g;
+    return acc;
+  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+}
+
+function renderDashboard() {
+  const profile = loadProfile();
+  const body = document.getElementById("dashboardBody");
+  if (!profile || !profile.targets) {
+    body.innerHTML = `<div class="empty">Set your goal in the Goals tab to see progress toward daily targets.</div>`;
+    return;
+  }
+  const totals = sumTotals(todaysMeals());
+  const t = profile.targets;
+
+  function bar(label, key, color, unit) {
+    const val = round1(totals[key]);
+    const target = t[key];
+    const pct = Math.min(100, Math.round((val / target) * 100)) || 0;
+    return `
+      <div class="macro-row" style="display:block;">
+        <div style="display:flex; justify-content:space-between; font-size:0.85rem;">
+          <span><span class="swatch" style="display:inline-block;background:${color};"></span> ${label}</span>
+          <span class="nums">${val} / ${target}${unit}</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${color};"></div></div>
+      </div>`;
+  }
+
+  body.innerHTML =
+    bar("Calories", "calories", "var(--cal)", " kcal") +
+    bar("Protein", "protein_g", "var(--protein)", "g") +
+    bar("Carbs", "carbs_g", "var(--carbs)", "g") +
+    bar("Fat", "fat_g", "var(--fat)", "g");
+}
+
+document.getElementById("coachTipBtn").addEventListener("click", async () => {
+  const profile = loadProfile();
+  const btn = document.getElementById("coachTipBtn");
+  const body = document.getElementById("coachTipBody");
+  btn.disabled = true;
+  body.textContent = "Thinking…";
+  try {
+    const resp = await fetch("/api/coach-tip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        goal: profile ? profile.goal : "not set",
+        targets: profile ? profile.targets : {},
+        today_totals: sumTotals(todaysMeals()),
+        recent_meals: loadMeals().slice(-6).map(m => ({ description: m.description, totals: m.totals, when: m.timestamp })),
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Could not get a tip");
+    body.innerHTML = `<div class="coach-tip">${escapeHtml(data.tip)}</div>`;
+  } catch (err) {
+    body.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- history ----------
+function renderHistory() {
+  const meals = loadMeals().slice().reverse();
+  const container = document.getElementById("historyList");
+  if (!meals.length) {
+    container.innerHTML = `<div class="empty">No meals logged yet.</div>`;
+    return;
+  }
+  container.innerHTML = meals.map(m => `
+    <div class="card meal-card">
+      <div class="head">
+        <strong>${escapeHtml(m.description || "Meal")}</strong>
+        <span class="time">${new Date(m.timestamp).toLocaleString()}</span>
+      </div>
+      <div class="nums" style="margin-top:6px;">
+        ${m.totals.calories} kcal · P${m.totals.protein_g} C${m.totals.carbs_g} F${m.totals.fat_g}
+      </div>
+      <button class="link" data-id="${m.id}" style="margin-top:8px;">Delete</button>
+    </div>
+  `).join("");
+  container.querySelectorAll("button.link").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const meals = loadMeals().filter(m => m.id !== btn.dataset.id);
+      saveMeals(meals);
+      renderHistory();
+      renderDashboard();
+    });
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str == null ? "" : String(str);
+  return div.innerHTML;
+}
+
+// ---------- init ----------
+(function init() {
+  const profile = loadProfile();
+  if (profile) {
+    fillProfileForm(profile);
+  }
+  updateTargetsPreview();
+  renderDashboard();
+})();
+</script>
+</body>
+</html>
